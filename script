@@ -5,7 +5,7 @@
 
   function init(){
     /* =============== CONFIG =============== */
-    var WORKER_BASE    = "https://digitaldaschatbot.digitaldas-website.workers.dev/";
+    var WORKER_BASE    = "https://mychatbot.sachinrawat-in-com.workers.dev";
     var PUBLIC_API_KEY = "mysite_chat_key_1234";
     var LOGO_URL       = "https://digitaldas.in/wp-content/uploads/2024/04/213.png";
     var WHATSAPP_URL   = "https://wa.link/ibnc8y";
@@ -18,7 +18,7 @@
     function esc(s){
       // Proper HTML entity escaping
       return String(s).replace(/[&<>"']/g, function(ch){
-        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+        return {'&':'&','<':'<','>':'>','"':'"',"'":'''}[ch];
       });
     }
     function md(src){
