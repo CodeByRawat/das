@@ -63,7 +63,7 @@
       "@media (prefers-color-scheme:light){:root{--bg:#ffffff;--fg:#0f172a;--muted:#6b7280;--panel:#ffffff;--card:#ffffff;--card-border:rgba(0,0,0,.08);--card-fg:#111827;}}",
       "#ddc-panel,#ddc-panel *{font-family:'Montserrat',sans-serif!important;box-sizing:border-box;}",
 
-      /* ===== PNG Bubble & 'Hi there' note (fall + bounce) ===== */
+      /* ===== PNG Bubble & 'Hi There' note (fall + bounce) ===== */
       "#ddc-btn{position:fixed;bottom:var(--offset);right:var(--offset);left:auto;width:64px;height:64px;border-radius:50%;border:none;cursor:pointer;box-shadow:0 10px 28px rgba(0,0,0,.24);background:transparent;color:#111827;font-size:0;z-index:2147483647;will-change:transform,opacity;transform:translateY(-120vh);opacity:0;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;}",
       ":root[data-ddc-corner='bl'] #ddc-btn{left:var(--offset);right:auto;}",
       "#ddc-btn .ddc-img{width:100%;height:100%;display:block;border-radius:50%;object-fit:cover;pointer-events:none;user-select:none;}",
@@ -82,11 +82,11 @@
       /* ===== Panel, Chat, Toast ===== */
       "#ddc-panel{position:fixed;bottom:calc(var(--offset) + 74px);right:var(--offset);left:auto;width:var(--widget-width);max-width:92vw;height:var(--widget-height);max-height:78vh;background:var(--panel);color:var(--fg);border-radius:var(--radius);overflow:hidden;display:none;z-index:2147483647;border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow);}",
       ":root[data-ddc-corner='bl'] #ddc-panel{left:var(--offset);right:auto;}",
-      "#ddc-head{background:var(--accent);color:#111827;padding:14px 14px 54px 14px;position:relative;z-index:3;}",
+      "#ddc-head{background:var(--accent);color:#111827;padding:14px 14px 25px 14px;position:relative;z-index:3;}",
       "#ddc-avatar{position:absolute;left:14px;top:14px;width:36px;height:36px;border-radius:50%;background:#fff url(\""+ LOGO_URL.replace(/"/g,'\\"') +"\") center/cover no-repeat;border:1px solid rgba(0,0,0,.12);}",
       "#ddc-close{position:absolute;right:12px;top:8px;cursor:pointer;color:#111827;font-size:20px;}",
       "#ddc-wtitle{margin:30px 0 0 0;font-weight:800;font-size:20px;text-align:center;}",
-      "#ddc-wsub{margin:2px 0 0 0;font-size:14px;text-align:center;font-weight:700;}",
+      "#ddc-wsub{margin:2px 0 0 0;font-size:14px;text-align:center;font-weight:500;}",
       "#ddc-menu{position:absolute;right:36px;top:8px;font-size:12px;color:#111827;background:rgba(255,255,255,.6);border-radius:10px;padding:4px 8px;cursor:pointer;user-select:none;}",
       "#ddc-menu:hover{background:rgba(255,255,255,.8);}",
       "#ddc-screens{position:absolute;left:0;right:0;top:110px;bottom:48px;width:200%;display:flex;transition:transform .34s ease;z-index:1;min-height:0;}",
@@ -139,7 +139,7 @@
     // “Hi there” note
     var note = document.createElement("div");
     note.id = "ddc-note";
-    note.textContent = "Hi there 👋";
+    note.textContent = "Hi There 👋";
     document.body.appendChild(note);
 
     // Chat panel
@@ -150,8 +150,8 @@
         '<div id="ddc-avatar" aria-hidden="true"></div>'+
         '<div id="ddc-close" title="Close">×</div>'+
         '<div id="ddc-menu" title="Reset chat">Reset</div>'+
-        '<h3 id="ddc-wtitle">Hi there 👋</h3>'+
-        '<div id="ddc-wsub">Hi, I am Tarush - your virtual AI assistant.</div>'+
+        '<h3 id="ddc-wtitle">Hi There 👋</h3>'+
+        '<div id="ddc-wsub">I am Tarush - your virtual AI assistant.</div>'+
       '</div>'+
       '<div id="ddc-screens">'+
         '<section class="ddc-screen"><div class="pad">'+
@@ -271,7 +271,7 @@
 
     function setHeaderName(){
       var name = (profile && profile.name) ? profile.name.trim() : "";
-      titleEl.textContent = name ? ("Hi, " + name + " 👋") : "Hi there 👋";
+      titleEl.textContent = name ? ("Hi, " + name + " 👋") : "Hi There 👋";
     }
     function lockUI(lock){
       tabChat.setAttribute("aria-disabled", lock ? "true" : "false");
