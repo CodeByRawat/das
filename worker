@@ -1,0 +1,388 @@
+export default {
+  async fetch(req, env, ctx) {
+    try {
+      // ---------- CORS (credentials-friendly) ----------
+      const allowed = (env.ALLOWED_ORIGINS || "")
+        .split(",").map(s => s.trim()).filter(Boolean);
+      const reqOrigin = req.headers.get("Origin") || "";
+      const allowAny = allowed.length === 0;
+      const acao = allowAny ? (reqOrigin || "*") : (allowed.includes(reqOrigin) ? reqOrigin : allowed[0] || "");
+      const CORS = {
+        "Access-Control-Allow-Origin": acao,
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, x-api-key",
+        "Access-Control-Allow-Credentials": "true",
+        "Vary": "Origin"
+      };
+      if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+
+      const url  = new URL(req.url);
+      const host = normalizePineconeHost(env.PINECONE_HOST);
+
+      // ---------- ROUTES ----------
+
+      // Upsert into Pinecone
+      if (url.pathname === "/upsert" && req.method === "POST") {
+        await requireKey(req, env.ADMIN_API_KEY, "ADMIN");
+        const body = await safeJson(req);
+        if (!body || !Array.isArray(body.items) || body.items.length === 0)
+          return json({ error: "bad_request", detail: "items required" }, 400, CORS);
+
+        const texts = body.items.map(it => it.text || "");
+        if (texts.some(t => !t || typeof t !== "string"))
+          return json({ error: "bad_request", detail: "each item.text must be non-empty string" }, 400, CORS);
+
+        const embeddings = await embedOpenAI(env, texts); // 1536-d
+        const vectors = body.items.map((it, i) => ({
+          id: it.id || `doc_${i}_${Date.now()}`,
+          values: embeddings[i],
+          metadata: { url: it.url || "", text: it.text }
+        }));
+        await pineconeUpsert(host, env.PINECONE_API_KEY, vectors);
+        return json({ ok: true, upserted: vectors.length }, 200, CORS);
+      }
+
+      // Chat (NO KV): client supplies history; we only log to Sheets
+      if (url.pathname === "/chat" && req.method === "POST") {
+        await requireKey(req, env.PUBLIC_CHAT_KEY, "PUBLIC");
+
+        // Session cookie (still used to group messages in Sheets)
+        const { id: sessionId, setCookie } = getOrSetAnonId(req);
+
+        const body = await safeJson(req);
+        const message = (body && body.message) ? String(body.message) : "";
+        if (!message) return json({ error: "bad_request", detail: "message required" }, 400, CORS);
+
+        const topK        = clamp(Number(body?.top_k ?? 2), 1, 10);
+        const temperature = clamp(Number(body?.temperature ?? 0.2), 0, 2);
+
+        // optional profile from client
+        const profile = {
+          name:    (body?.profile?.name    || "").trim(),
+          email:   (body?.profile?.email   || "").trim(),
+          mobile:  (body?.profile?.mobile  || "").trim(),
+          company: (body?.profile?.company || "").trim(),
+        };
+
+        // optional client-side history: array of {role, content}
+        const clientHistory = Array.isArray(body?.history) ? body.history
+          .filter(m => m && typeof m.content === "string" && (m.role === "user" || m.role === "assistant"))
+          .slice(-60) // cap
+          : [];
+
+        // RAG retrieve (guard host)
+        const [qvec] = await embedOpenAI(env, [message]);
+        const qres = await pineconeQuery(host, env.PINECONE_API_KEY, qvec, topK);
+        const matches = (qres?.matches || [])
+          .filter(m => m?.metadata?.text && (m.score ?? 0) > 0.65);
+        const contextBlocks = matches.map((m, i) => `# Doc ${i+1} (score ${m.score?.toFixed(3) ?? "?"})
+URL: ${m.metadata?.url || "n/a"}
+---
+${m.metadata?.text}`).join("\n\n");
+
+        // Build messages for Chat API
+        const chatMsgs = [
+          { role: "system", content: (body?.system || `You are DigitalDas virtual assistant your name is Tarush , a helpful website assistant.  
+          Always answer ONLY using the context provided from history and the knowledge base  
+          
+          Behavior rules:
+          - When the user greets you (e.g., "Hi", "Hello", "Hey"), respond with a warm and polite greeting such as:
+          •start with like  
+          • "Hi there! I'm Tarush your AI assistnt. How can I help you ?"  
+          do not mention about the team or anything els until user ask, keep the greetings short and concise
+         - If the user explicitly says something like "Welcome" or "Good to be here," then you may respond with:  
+          • "Welcome to Digital Das! I’m here to guide you with our services and support."  
+  
+          - If asked about pricing:
+            • Begin by saying: "We provide customized pricing for each business."  
+            • If the user asks for general pricing, share the available pricing details from the knowledge base.  
+          
+          - When asked about Digital Das (the company or its services or about contacting or connecting with the company ):
+            • Always include the official [**WhatsApp**](https://wa.link/ibnc8y) link.  
+            • Always include the official this is must[**Email**](mailto:info@digitaldas.in).  
+            • Always include the [**Mobile**](tel:+916387812688) link.  
+            • These must always be provided as clickable Markdown links.  
+          
+          - When asked about the founder:
+            • Provide ALL available information from the knowledge base.  
+            • Do not apply the 120-word limit.  
+            • Include details such as background, role, LinkedIn profile [**Linkedin**](https://www.linkedin.com/in/pratishekdas/), and always encourage call and whatsapp option.  
+          
+          - When asked about the team (team size or individual members):
+            • Provide the requested information (team size or member details).  
+            • Always include the official [**Our Team**](https://digitaldas.in/our-team/) page link.  
+            • Always include the official [**WhatsApp**](https://wa.link/ibnc8y) link.  
+            • Always use proper new lines for different links.  
+          
+          - When asked **“how you can help my business”** or **any other queries not in the knowledge base but within DigitalDas’s scope**:
+            • Clearly explain how DigitalDas can help (services, solutions, results).  
+            • Always include all contact options:  
+              - mention discovery form clickable link
+              - [**Email**](mailto:info@digitaldas.in)  
+              - [**Mobile**](tel:+916387812688)  
+          
+          - If the user asks about anything unrelated to DigitalDas:  
+            • Politely say it’s outside scope.  
+            • Still share all contact options so they can reach us directly.  
+          
+          - Always assume the information retrieved is about Digital Das.  
+            • Speak as if representing the company.  
+            • Mention the founder and team when relevant.  
+          
+          - For all other answers:
+            • Keep replies clear, concise, and under 120 words whenever possible.  
+          
+          Formatting rules:
+          - Use short paragraphs, lists, or bullets.  
+          - Whenever you mention WhatsApp,  Email, Mobile, or Team page, always provide them as clickable links.  
+          - Ensure proper spacing so text and links remain on the same line.  
+         
+          `) }
+        ];
+
+        if (profile.name || profile.email || profile.mobile || profile.company) {
+          const summary = [
+            profile.name    ? `Name: ${profile.name}` : null,
+            profile.email   ? `Email: ${profile.email}` : null,
+            profile.mobile  ? `Mobile: ${profile.mobile}` : null,
+            profile.company ? `Business: ${profile.company}` : null
+          ].filter(Boolean).join(" | ");
+          chatMsgs.push({ role: "system", content: `Lead profile: ${summary}` });
+        }
+
+        // Add client-provided history
+        for (const m of clientHistory) chatMsgs.push(m);
+
+        // Add current user turn
+        chatMsgs.push({ role: "user", content: message });
+
+        // Attach RAG context as a separate hint
+        if (contextBlocks) {
+          chatMsgs.push({ role: "system", content: `Relevant knowledge base context:\n${contextBlocks}` });
+        }
+
+        const answer = await chatOpenAI(env, chatMsgs, temperature);
+
+        // Log to Google Sheets (fire-and-forget)
+        const ts = new Date().toISOString();
+        const basePayload = {
+          kind: "message",
+          ts_iso: ts,
+          ddc_id: sessionId,
+          session_id: sessionId,
+          name: profile?.name || "",
+          email: profile?.email || ""
+          // no referrer / user_agent
+        };
+        fireAndForget(ctx, forwardMessageToSheet(env, { ...basePayload, role:"user",      content: message }));
+        fireAndForget(ctx, forwardMessageToSheet(env, { ...basePayload, role:"assistant", content: answer }));
+
+        const headers = { ...CORS };
+        if (setCookie) headers["Set-Cookie"] = setCookie;
+
+        return new Response(JSON.stringify({
+          answer,
+          top_ids: matches.map(m => m.id),
+          top_scores: matches.map(m => m.score),
+          used_context_count: matches.length,
+          forwarded_user: true,
+          forwarded_assistant: true,
+          session: sessionId
+        }), { status: 200, headers: { "Content-Type": "application/json", ...headers } });
+      }
+
+      // Lead capture (still logs to Sheets; NO KV)
+      if (url.pathname === "/lead" && req.method === "POST") {
+        await requireKey(req, env.PUBLIC_CHAT_KEY, "PUBLIC");
+        const { id: sessionId, setCookie } = getOrSetAnonId(req);
+
+        const b = await safeJson(req) || {};
+        const name    = String(b.name    || "").trim();
+        const email   = String(b.email   || "").trim().toLowerCase();
+        const mobile  = String(b.mobile  || "").trim();
+        const company = String(b.company || "").trim();
+        const consent = Boolean(b.consent);
+        if (!name || !email) return json({ error: "bad_request", detail: "name and email required" }, 400, CORS);
+
+        const ts = new Date().toISOString();
+
+        // forward to Apps Script (fire-and-forget)
+        let forwarded = false;
+        if (env.APPS_SCRIPT_URL) {
+          fireAndForget(ctx, fetch(env.APPS_SCRIPT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              kind: "lead",
+              ts_iso: ts,
+              ddc_id: sessionId,
+              name,
+              email,
+              mobile,
+              business: company,
+              consent
+            })
+          }).catch(()=>{}));
+          forwarded = true;
+        }
+
+        const headers = { ...CORS };
+        if (setCookie) headers["Set-Cookie"] = setCookie;
+
+        return new Response(JSON.stringify({ ok: true, forwarded, ddc_id: sessionId }), {
+          status: 200, headers: { "Content-Type": "application/json", ...headers }
+        });
+      }
+
+      // Peek / stats
+      if (url.pathname === "/peek" && req.method === "GET") {
+        await requireKey(req, env.PUBLIC_CHAT_KEY, "PUBLIC");
+        return json({
+          ok: true,
+          pinecone_host_set: Boolean(host),
+          allowed_origins_count: (env.ALLOWED_ORIGINS || "").split(",").filter(Boolean).length
+        }, 200, CORS);
+      }
+
+      // Stats (Pinecone)
+      if (url.pathname === "/stats" && req.method === "GET") {
+        await requireKey(req, env.ADMIN_API_KEY, "ADMIN");
+        const stats = await pineconeStats(host, env.PINECONE_API_KEY);
+        return json({ ok: true, stats }, 200, CORS);
+      }
+
+      // Admin historical endpoints removed (no KV)
+      if (url.pathname.startsWith("/admin/")) {
+        return json({ ok:false, error:"not_supported_without_kv" }, 400, CORS);
+      }
+
+      return json({ error: "not_found" }, 404, CORS);
+    } catch (err) {
+      return new Response(JSON.stringify({ error: "server_error", detail: String(err?.message || err || "unknown") }), {
+        status: 500, headers: { "Content-Type": "application/json" }
+      });
+    }
+  }
+};
+
+/* ---------- Helpers ---------- */
+function json(obj, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...extraHeaders } });
+}
+async function safeJson(req) { const t = await req.text(); try { return JSON.parse(t || "{}"); } catch { return null; } }
+async function requireKey(req, expected, label) {
+  const got = req.headers.get("x-api-key") || "";
+  if (!expected || got !== expected) throw new Error(`${label || "api"}_unauthorized`);
+}
+function clamp(n, min, max) { return Math.max(min, Math.min(max, Number.isFinite(n) ? n : min)); }
+function normalizePineconeHost(h) {
+  if (!h) return h;
+  let s = h.trim();
+  if (s.startsWith("http://")) s = s.slice(7);
+  if (s.startsWith("https://")) s = s.slice(8);
+  if (s.endsWith("/")) s = s.slice(0, -1);
+  const i = s.indexOf("/");
+  if (i !== -1) s = s.slice(0, i);
+  return s;
+}
+function getOrSetAnonId(req) {
+  // still issue a cookie to group logs in Sheets
+  const cookie = req.headers.get("Cookie") || "";
+  const m = cookie.match(/(?:^|;\s*)ddc_id=([^;]+)/);
+  if (m) return { id: m[1], setCookie: null };
+  const id = crypto.randomUUID();
+  const setCookie = `ddc_id=${id}; Path=/; Max-Age=${60*60*24*30}; SameSite=Lax`;
+  return { id, setCookie };
+}
+
+/* ---- Small infra helpers: timeouts + waitUntil ---- */
+function fetchWithTimeout(url, opts={}, ms=12000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort("timeout"), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(id));
+}
+function fireAndForget(ctx, promise) {
+  try { ctx.waitUntil(promise); } catch {}
+}
+
+/* ---------- OpenAI ---------- */
+const OPENAI_EMBED_MODEL = "text-embedding-3-small"; // 1536 dims
+const OPENAI_CHAT_MODEL  = "gpt-4o-mini";
+
+function openaiBase(env) {
+  return (env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/+$/,"");
+}
+async function embedOpenAI(env, texts) {
+  const r = await fetchWithTimeout(`${openaiBase(env)}/v1/embeddings`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: OPENAI_EMBED_MODEL, input: texts })
+  }, 8000);
+  if (!r.ok) throw new Error(`OPENAI_EMBED_ERROR: ${await r.text()}`);
+  const j = await r.json();
+  const vecs = j.data.map(d => d.embedding);
+  if (!vecs.length || vecs[0].length !== 1536) throw new Error(`EMBED_DIM_MISMATCH: expected 1536, got ${vecs[0]?.length || 0}`);
+  return vecs;
+}
+async function chatOpenAI(env, messages, temperature) {
+  const r = await fetchWithTimeout(`${openaiBase(env)}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: OPENAI_CHAT_MODEL, temperature, max_tokens: 350, messages })
+  }, 12000);
+  if (!r.ok) throw new Error(`OPENAI_CHAT_ERROR: ${await r.text()}`);
+  const j = await r.json();
+  return j.choices?.[0]?.message?.content?.trim() || "";
+}
+
+/* ---------- Pinecone (REST) ---------- */
+async function pineconeUpsert(host, apiKey, vectors) {
+  if (!host) return;
+  const r = await fetchWithTimeout(`https://${host}/vectors/upsert`, {
+    method: "POST",
+    headers: { "Api-Key": apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ vectors })
+  }, 2500);
+  if (!r.ok) throw new Error(`PINECONE_UPSERT_ERROR: ${await r.text()}`);
+}
+async function pineconeQuery(host, apiKey, vector, topK) {
+  if (!host) return { matches: [] };
+  const r = await fetchWithTimeout(`https://${host}/query`, {
+    method: "POST",
+    headers: { "Api-Key": apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ vector, topK, includeMetadata: true })
+  }, 2500);
+  if (!r.ok) throw new Error(`PINECONE_QUERY_ERROR: ${await r.text()}`);
+  return await r.json();
+}
+async function pineconeStats(host, apiKey) {
+  if (!host) return {};
+  const r = await fetchWithTimeout(`https://${host}/describe_index_stats`, {
+    method: "POST",
+    headers: { "Api-Key": apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  }, 2500);
+  if (!r.ok) throw new Error(`PINECONE_STATS_ERROR: ${await r.text()}`);
+  return await r.json();
+}
+
+/* ---------- Google Sheets forward ---------- */
+async function forwardMessageToSheet(env, payload) {
+  if (!env.APPS_SCRIPT_URL) return false;
+  try {
+    const r = await fetchWithTimeout(env.APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, 5000);
+    if (!r.ok) {
+      const txt = await r.text();
+      console.log("Sheets forward failed:", r.status, txt);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.log("Sheets forward error:", String(e));
+    return false;
+  }
+}
