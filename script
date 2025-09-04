@@ -10,17 +10,23 @@
     var LOGO_URL       = "https://digitaldas.in/wp-content/uploads/2024/04/213.png";
     var WHATSAPP_URL   = "https://wa.link/ibnc8y";
     var CORNER         = "br"; // "bl" for bottom-left
-    var ROBOT_PNG_URL  = "http://datawithsachin.com/wp-content/uploads/2025/09/robot-assistant.png";
+    var ROBOT_PNG_URL  = "https://datawithsachin.com/wp-content/uploads/2025/09/robot-assistant.png";
     document.documentElement.setAttribute("data-ddc-corner", CORNER);
 
     /* =============== UTIL =============== */
     function $(sel, root){ return (root||document).querySelector(sel); }
     function esc(s){
-      // Proper HTML entity escaping
-      return String(s).replace(/[&<>"']/g, function(ch){
-        return {'&':'&','<':'<','>':'>','"':'"',"'":'''}[ch];
-      });
-    }
+  return String(s).replace(/[&<>"']/g, function(ch){
+    return {
+      '&' : '&amp;',
+      '<' : '&lt;',
+      '>' : '&gt;',
+      '"' : '&quot;',
+      "'" : '&#39;'
+    }[ch];
+  });
+}
+
     function md(src){
       var s = esc(src);
       s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:|tel:)[^\s)]+)\)/gi,'<a href="$2" target="_blank" rel="noopener">$1</a>');
