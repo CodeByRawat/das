@@ -5,7 +5,7 @@
 
   function init(){
     /* =============== CONFIG =============== */
-    var WORKER_BASE    = "https://mychatbot.sachinrawat-in-com.workers.dev";
+    var WORKER_BASE    = "https://digitaldaschatbot.digitaldas-website.workers.dev/";
     var PUBLIC_API_KEY = "mysite_chat_key_1234";
     var LOGO_URL       = "https://digitaldas.in/wp-content/uploads/2024/04/213.png";
     var WHATSAPP_URL   = "https://wa.link/ibnc8y";
@@ -145,7 +145,7 @@
         '<div id="ddc-close" title="Close">×</div>'+
         '<div id="ddc-menu" title="Reset chat">Reset</div>'+
         '<h3 id="ddc-wtitle">Hi there 👋</h3>'+
-        '<div id="ddc-wsub">Hi, I am Tarush — your virtual AI assistant.</div>'+
+        '<div id="ddc-wsub">Hi, I am Tarush - your virtual AI assistant.</div>'+
       '</div>'+
       '<div id="ddc-screens">'+
         '<section class="ddc-screen"><div class="pad">'+
