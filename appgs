@@ -1,0 +1,135 @@
+const SHEET_ID = "12SyHVlV8_iEdAtAl0HrAoEaF-mIE-m3Izkgjx4JJ0do";
+
+// Your existing sheet names (case-insensitive; we’ll normalize if needed)
+const LEADS_SHEET_NAME    = 'Leads';
+const MESSAGES_SHEET_NAME = 'Messages';
+
+// Column order as per your sheets
+const LEADS_HEADERS    = ['ts_iso','ddc_id','name','email','mobile','business','consent','time'];
+const MESSAGES_HEADERS = ['ts_iso','ddc_id','session_id','role','content','name','email','time'];
+
+/* ---------- helpers ---------- */
+function sheetByName(nameExact) {
+  const target = String(nameExact || '').trim();
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // Exact match first
+  let sh = ss.getSheetByName(target);
+  if (sh) return sh;
+
+  // Fuzzy match (case/space)
+  const targetLC = target.toLowerCase();
+  const found = ss.getSheets().find(s => s.getName().trim().toLowerCase() === targetLC);
+  if (found) {
+    if (found.getName() !== target) {
+      try { found.setName(target); } catch (_) {}
+    }
+    return found;
+  }
+  // Create if missing
+  return ss.insertSheet(target);
+}
+
+function ensureHeaderRow(sh, headers) {
+  const need = headers.length;
+  const row = sh.getRange(1, 1, 1, need).getValues()[0];
+  const mismatch = headers.some((h,i) => row[i] !== h);
+  if (mismatch) {
+    sh.getRange(1, 1, 1, need).setValues([headers]);
+  }
+}
+
+function pick(obj, keys) { return keys.map(k => obj[k] ?? ''); }
+
+function nowTimestamps() {
+  const now = new Date();
+  return {
+    ts_iso: now.toISOString(),                                       // UTC ISO
+    time:   Utilities.formatDate(now, 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss') // IST
+  };
+}
+
+/* ---------- endpoints ---------- */
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents || '{}');
+
+    // Always populate timestamps (caller can omit them)
+    const { ts_iso, time } = nowTimestamps();
+    body.ts_iso = body.ts_iso || ts_iso;
+    body.time   = body.time   || time;
+
+    if (body.kind === 'lead') {
+      const sh = sheetByName(LEADS_SHEET_NAME);
+      ensureHeaderRow(sh, LEADS_HEADERS);
+      sh.appendRow(pick(body, LEADS_HEADERS));
+      return json({ ok:true, wrote:'lead' });
+    }
+
+    if (body.kind === 'message') {
+      const sh = sheetByName(MESSAGES_SHEET_NAME);
+      ensureHeaderRow(sh, MESSAGES_HEADERS);
+      sh.appendRow(pick(body, MESSAGES_HEADERS));
+      return json({ ok:true, wrote:'message' });
+    }
+
+    return json({ ok:false, error:'unknown_kind' });
+  } catch (err) {
+    return json({ ok:false, error:String(err) });
+  }
+}
+
+function doGet(e) {
+  try {
+    const params = e.parameter || {};
+    if ((params.kind || '').toLowerCase() !== 'history') {
+      return json({ ok:false, error:'unknown_kind' });
+    }
+
+    const byEmail = (params.email || '').trim().toLowerCase();
+    const byDdcId = (params.ddc_id || '').trim();
+    let limit = parseInt(params.limit || '30', 10);
+    if (!isFinite(limit) || limit <= 0) limit = 30;
+
+    const sh = sheetByName(MESSAGES_SHEET_NAME);
+    ensureHeaderRow(sh, MESSAGES_HEADERS);
+
+    const rows = sh.getDataRange().getValues();
+    if (rows.length <= 1) return json({ ok:true, items: [] });
+
+    const head = rows[0];
+    const idx = {};
+    MESSAGES_HEADERS.forEach(h => idx[h] = head.indexOf(h));
+
+    const items = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const email = String(r[idx.email] || '').toLowerCase();
+      const ddc   = String(r[idx.ddc_id] || '');
+      const include = byEmail ? (email === byEmail) : (byDdcId && ddc === byDdcId);
+      if (include) {
+        items.push({
+          ts_iso    : String(r[idx.ts_iso] || ''),
+          time      : String(r[idx.time]   || ''), // IST string at the end in sheet, included in API
+          ddc_id    : ddc,
+          session_id: String(r[idx.session_id] || ''),
+          role      : String(r[idx.role] || ''),
+          content   : String(r[idx.content] || ''),
+          name      : String(r[idx.name] || ''),
+          email     : String(r[idx.email] || '')
+        });
+      }
+    }
+
+    items.sort((a,b) => String(a.ts_iso).localeCompare(String(b.ts_iso)));
+    return json({ ok:true, items: items.slice(-limit) });
+  } catch (err) {
+    return json({ ok:false, error:String(err) });
+  }
+}
+
+function json(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
