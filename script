@@ -17,7 +17,7 @@
     function $(sel, root){ return (root||document).querySelector(sel); }
     function esc(s){
       return String(s).replace(/[&<>"']/g, function(ch){
-        return {'&':'&','<':'<','>':'>','"':'"',"'":'''}[ch];
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
       });
     }
     function md(src){
