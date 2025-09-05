@@ -157,13 +157,13 @@
         '<section class="ddc-screen"><div class="pad">'+
           '<form id="ddc-form" class="ddc-card" novalidate>'+
             '<label class="lbl" for="f-name">Your name</label>'+
-            '<input class="inp" id="f-name" name="name" required placeholder="e.g., Sachin Rawat" autocomplete="name">'+
+            '<input class="inp" id="f-name" name="name" required placeholder="Your Name" autocomplete="name">'+
             '<label class="lbl" for="f-email">Email</label>'+
-            '<input class="inp" id="f-email" name="email" type="email" required placeholder="you@example.com" autocomplete="email">'+
+            '<input class="inp" id="f-email" name="email" type="email" required placeholder="Your Email" autocomplete="email">'+
             '<label class="lbl" for="f-mobile">Mobile</label>'+
-            '<input class="inp" id="f-mobile" name="mobile" placeholder="10-digit mobile" inputmode="numeric" pattern="[0-9]*" autocomplete="tel">'+
+            '<input class="inp" id="f-mobile" name="mobile" placeholder="Your Mobile No." inputmode="numeric" pattern="[0-9]*" autocomplete="tel">'+
             '<label class="lbl" for="f-company">Business / Company</label>'+
-            '<input class="inp" id="f-company" name="company" placeholder="Digital Das" autocomplete="organization">'+
+            '<input class="inp" id="f-company" name="company" placeholder="Your Company Name" autocomplete="organization">'+
             '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted)">'+
               '<input type="checkbox" id="f-consent" required> I agree to be contacted by email/phone.'+
             '</label>'+
