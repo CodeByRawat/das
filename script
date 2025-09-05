@@ -16,17 +16,10 @@
     /* =============== UTIL =============== */
     function $(sel, root){ return (root||document).querySelector(sel); }
     function esc(s){
-  return String(s).replace(/[&<>"']/g, function(ch){
-    return {
-      '&' : '&amp;',
-      '<' : '&lt;',
-      '>' : '&gt;',
-      '"' : '&quot;',
-      "'" : '&#39;'
-    }[ch];
-  });
-}
-
+      return String(s).replace(/[&<>"']/g, function(ch){
+        return {'&':'&','<':'<','>':'>','"':'"',"'":'''}[ch];
+      });
+    }
     function md(src){
       var s = esc(src);
       s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:|tel:)[^\s)]+)\)/gi,'<a href="$2" target="_blank" rel="noopener">$1</a>');
@@ -77,6 +70,8 @@
       "#ddc-btn.ddc-enter, #ddc-note.ddc-enter{animation:ddc-fall-bounce 1s cubic-bezier(.22,1,.36,1) both;}",
       "#ddc-btn.ddc-attn::before{content:'';position:absolute;inset:-10px;border-radius:999px;border:2px solid rgba(241,196,15,.65);animation:ddc-pulse 1.8s ease-out infinite;}",
       "@keyframes ddc-pulse{0%{transform:scale(.92);opacity:.8}70%{transform:scale(1.1);opacity:.1}100%{transform:scale(1.2);opacity:0}}",
+      "@keyframes ddc-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}",
+      ".shake{animation:ddc-shake .34s linear;}",
       "@media (prefers-reduced-motion:reduce){#ddc-btn,#ddc-note{transform:none;opacity:1}#ddc-btn.ddc-enter,#ddc-note.ddc-enter,#ddc-btn.ddc-attn::before{animation:none!important}}",
 
       /* ===== Panel, Chat, Toast ===== */
@@ -89,9 +84,9 @@
       "#ddc-wsub{margin:2px 0 0 0;font-size:14px;text-align:center;font-weight:500;}",
       "#ddc-menu{position:absolute;right:36px;top:8px;font-size:12px;color:#111827;background:rgba(255,255,255,.6);border-radius:10px;padding:4px 8px;cursor:pointer;user-select:none;}",
       "#ddc-menu:hover{background:rgba(255,255,255,.8);}",
+
       "#ddc-screens{position:absolute;left:0;right:0;top:110px;bottom:48px;width:200%;display:flex;transition:transform .34s ease;z-index:1;min-height:0;}",
       ".ddc-screen{width:50%;overflow:hidden;display:flex;flex-direction:column;min-height:0;}",
-      "#ddc-screens .ddc-screen:first-child{overflow:auto;}",
       ".pad{padding:12px;}",
       ".ddc-card{background:var(--card);color:var(--card-fg);border:1px solid var(--card-border);border-radius:14px;padding:12px;box-shadow:0 6px 20px rgba(0,0,0,.08);margin-top:12px;}",
       ".lbl{font-size:13px;color:var(--muted);margin:8px 2px 4px;display:block;}",
@@ -104,12 +99,14 @@
       ".ddc-user{align-self:flex-end;background:rgba(235,166,37,0.18);border:1px solid rgba(37,99,235,.35);color:var(--fg);text-align:right;}",
       ".ddc-msg a{color:#1d4ed8;text-decoration:underline;font-weight:600;word-break:break-all;}",
       ".ddc-code{padding:2px 4px;border-radius:4px;border:1px solid rgba(255,255,255,.2);}",
+
       "#ddc-row{position:sticky;bottom:0;left:0;right:0;z-index:10;padding:10px 10px 12px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.10));border-top:1px solid rgba(0,0,0,.08);}",
       "#ddc-in{display:block;width:100%;height:44px;line-height:44px;font-size:14px;border-radius:12px;border:1px solid rgba(0,0,0,.15);background:#fff;color:#0f172a;padding:0 96px 0 12px;box-shadow:none;outline:none;}",
       "#ddc-in::placeholder{color:#6b7280;opacity:.9;}",
       "#ddc-send{position:absolute;right:18px;top:50%;transform:translateY(-50%);height:36px;padding:0 14px;min-width:72px;border:0;border-radius:12px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;}",
       "#ddc-send:hover{transform:translateY(-50%) translateY(-1px);}",
       "#ddc-send[disabled]{opacity:.65;cursor:not-allowed;transform:translateY(-50%);}",
+
       "#ddc-tabs{position:absolute;left:0;bottom:0;width:100%;display:flex;border-top:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);backdrop-filter:blur(6px);z-index:2;}",
       ".ddc-tab{flex:1;text-align:center;padding:10px 0;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;user-select:none;}",
       ".ddc-tab.active{font-weight:700;border-top:2px solid var(--brand)}",
@@ -117,6 +114,13 @@
       ".dot{width:8px;height:8px;border-radius:50%;background:#22c55e}",
       "#ddc-toast{position:absolute;left:50%;bottom:64px;transform:translateX(-50%) translateY(16px);background:#111827;color:#fff;padding:10px 14px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s ease, transform .25s ease;box-shadow:0 10px 24px rgba(0,0,0,.25);z-index:5;}",
       "#ddc-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}"
+    ].join("");
+
+    /* --- SCROLL-RESILIENCE PATCHES (against global page overflow blockers) --- */
+    css += [
+      ".ddc-scroll{overflow:auto!important;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}",
+      "#ddc-screens, .ddc-screen{min-height:0!important;}",
+      "#ddc-msgs, #ddc-screens .ddc-screen:first-child{contain:paint;}"
     ].join("");
 
     var style = document.createElement("style");
@@ -151,10 +155,10 @@
         '<div id="ddc-close" title="Close">×</div>'+
         '<div id="ddc-menu" title="Reset chat">Reset</div>'+
         '<h3 id="ddc-wtitle">Hi There 👋</h3>'+
-        '<div id="ddc-wsub">I am Tarush - your virtual AI assistant.</div>'+
+        '<div id="ddc-wsub">I am Tarush from Digital Das.</div>'+
       '</div>'+
       '<div id="ddc-screens">'+
-        '<section class="ddc-screen"><div class="pad">'+
+        '<section class="ddc-screen ddc-scroll"><div class="pad">'+
           '<form id="ddc-form" class="ddc-card" novalidate>'+
             '<label class="lbl" for="f-name">Your name</label>'+
             '<input class="inp" id="f-name" name="name" required placeholder="Your Name" autocomplete="name">'+
@@ -176,7 +180,7 @@
           '</form>'+
         '</div></section>'+
         '<section class="ddc-screen">'+
-          '<div id="ddc-msgs" aria-live="polite"></div>'+
+          '<div id="ddc-msgs" class="ddc-scroll" aria-live="polite"></div>'+
           '<div id="ddc-row">'+
             '<input id="ddc-in" type="text" placeholder="Type your message…"/>'+
             '<button id="ddc-send">Send</button>'+
@@ -206,6 +210,13 @@
     var send    = $("#ddc-send");
     var titleEl = $("#ddc-wtitle");
     var toast   = $("#ddc-toast");
+
+    /* helper: stop page from hijacking scroll inside widget */
+    function guardScroll(el){
+      if(!el) return;
+      el.addEventListener('wheel', function(e){ e.stopPropagation(); }, {passive:true});
+      el.addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
+    }
 
     /* =============== ENTRANCE (apply to BOTH) =============== */
     requestAnimationFrame(function(){ requestAnimationFrame(function(){
@@ -316,6 +327,10 @@
       return (msgs.scrollHeight - (msgs.scrollTop + msgs.clientHeight)) < pad;
     }
     msgs.addEventListener('scroll', function(){ userScrolledUp = !nearBottom(); });
+
+    /* guard scroll areas against page-level blockers */
+    guardScroll(msgs);
+    guardScroll(screens.querySelector('.ddc-screen.ddc-scroll')); // form screen scroll
 
     /* =============== MESSAGES =============== */
     function addMsg(text, who){
